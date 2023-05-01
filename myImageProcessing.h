@@ -26,7 +26,7 @@ VipsImage* grayscale(VipsImage* image) {
     return grayImage;
 }
 
-VipsImage* rotate_image(VipsImage* image,int angle) {
+VipsImage* rotate_image(VipsImage* image,double angle) {
     VipsImage *rotatedImage = NULL;
     VipsImage *copy = make_copy(image);
     if(vips_rotate(copy,&rotatedImage,angle, NULL)){
@@ -40,8 +40,13 @@ char* generate_random_image_name(const char *extension) {
     const char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     int alphabet_size = sizeof(alphabet) - 1;
     int random_length = 20;
-    char *buffer = malloc(20*sizeof(char)+1);
 
+    char *buffer = NULL;
+    if (buffer != NULL) {
+        free(buffer);
+    }
+    buffer = malloc(30*sizeof(char)+1);
+    
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
 
