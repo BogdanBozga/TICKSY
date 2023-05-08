@@ -1,8 +1,19 @@
-// #include <vips/vips.h>
 #include <stdio.h>
+#include <vips/vips.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/un.h>
+#include <arpa/inet.h>
+#include <pthread.h>
 #include "myImageProcessing.h"
-
+#define SA struct sockaddr
 int path_size = 250;
+int PORT = 5005;
 
 int file_exists(const char *file_path) {
     struct stat buffer;
@@ -18,6 +29,120 @@ void get_file_path(char *file_path){
     }else{
         printf("File found at %s\n",file_path);
     }
+}
+
+void* func(void* conn)
+{
+    int connfd = *(int*)conn;
+    printf("readinf type of operation ");
+    int type;
+    recv(connfd, &type, sizeof(int), 0);
+    printf("%d \n", type);
+    if (type < 1 || type > 5)
+    {
+        // return 1;
+    }
+    printf("Reading Picture Size\n");
+    int size;
+    recv(connfd, &size, sizeof(int), 0);
+    printf("Received Picture Size: %d\n", size);
+
+    // Read Picture Byte Array
+    printf("Reading Picture Byte Array\n");
+    // char p_array[1024];
+    // char *filename;
+    // filename = generate_random_image_name("png");
+
+    // char folder[255] = "serverIn/";
+    // strcat(folder, filename);
+
+    // FILE *image = fopen(folder, "wb");
+    // int nb;
+    // while (size > 0)
+    // {
+
+    //     nb = recv(connfd, p_array, 1024, 0);
+    //     if (nb < 0)
+    //         continue;
+    //     size = size - nb;
+
+    //     fwrite(p_array, 1, nb, image);
+    // }
+
+    // fclose(image);
+
+    // VipsImage *in;
+
+    // printf("Image proccesing started\n");
+    // if (!(in = vips_image_new_from_file(folder, NULL)))
+    //     vips_error_exit(NULL);
+
+    // printf("image loaded\n");
+
+    // printf("image processed\n");
+
+    // char folder1[255] = "serverOut/";
+    // strcat(folder1, filename);
+
+    // if (vips_image_write_to_file(out, folder1, NULL))
+    //     vips_error_exit(NULL);
+
+    // printf("Image proccesing ended\n");
+
+    // g_object_unref(in);
+    // g_object_unref(out);
+
+    // sendImg(connfd, filename);
+
+    // return 0;
+    return NULL;
+}
+
+void *inetClient()
+{   
+    int socket_desc;
+    struct sockaddr_in server;
+    socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_desc == -1)
+    {
+        perror("EROARE server: nu pot sa deschid stream socket");
+    }
+    printf("Socket creat\n");
+    // Prepare the sockaddr_in structure
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = htonl(INADDR_ANY);
+    server.sin_port = htons(PORT);
+
+    // Binding newly created socket to given IP and verification
+    if ((bind(socket_desc, (struct sockaddr *)&server, sizeof(server))) != 0){
+        perror("Bind failed. Error");
+        // return 1;
+    }
+    printf("Bind realizat\n");
+    if ((listen(socket_desc, 30)) != 0){
+        printf("Listen failed...\n");
+        exit(0);
+    }
+    printf("Server listening..\n");
+    struct sockaddr_in client_addr;
+    while (TRUE)
+    {
+        // Accept the data packet from client and verification
+        socklen_t len = sizeof(client_addr);
+        int connected_sock = accept(socket_desc, (SA *)&client_addr,&len );
+        if (connected_sock < 0)
+        {
+            printf("server accept failed...\n");
+            exit(0);
+        }
+        printf("server accept the client...\n");
+        pthread_t t;
+        // int *pconfd = malloc(sizeof(int));
+        // *pconfd = connected_sock;
+        pthread_create(&t, NULL, func, (void *)&connected_sock);
+    }
+    // After chatting close the socket
+    close(socket_desc);
 }
 
 
@@ -108,19 +233,21 @@ void choise_maker(char *file_path)
     } while (choice != 7);
 }
 
-// /home/bogdan-ubuntu-vm/pcd/TICKSY/test.jpg
-// strcpy(saveLocation,"out_images/");
-// strcat(saveLocation, generate_random_image_name(".jpg"));
-
-// if (vips_image_write_to_file( out, saveLocation, NULL))
-//     vips_error_exit(NULL);
-// printf("Image proccesing ended\n");
 
 int main(int argc, char **argv)
 {
-    char *file_path = malloc(path_size * sizeof(char));
-    choise_maker(file_path);
-    printf("Byyy");
+    if(VIPS_INIT(argv[0]))
+        vips_error_exit( NULL );
+    pthread_t thread_id[2];
+
+    // pthread_create(&thread_id[0], NULL, adminClient, NULL);
+    pthread_create(&thread_id[0], NULL, inetClient, NULL);
+    pthread_join(thread_id[0], NULL);
+    // for (int i = 0; i < 1; i++)
+    //     pthread_join(thread_id[i], NULL);
+    
+    printf("Byyy\n");
+    return (0);
 }
 
 // gcc -g -Wall -o server.out server.c `pkg-config vips --cflags --libs`
