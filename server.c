@@ -12,8 +12,27 @@
 #include <pthread.h>
 #include "myImageProcessing.h"
 #define SA struct sockaddr
-int path_size = 250;
+int path_size = 512;
 int PORT = 5005;
+int sockfd_global;
+VipsImage *image = NULL;
+
+
+char *choiceText = "------------------------------------------------------\n"
+                    "Please choose an option from the list below:\n"
+                        "\t1. Edit a new image\n"
+                        "\t2. Save the edited image\n"
+                        "\t3. Apply gray scale to the image\n"
+                        "\t4. Resize the image\n"
+                        "\t5. Rotate the image\n"
+                        "\t6. Apply sobel to the image\n"
+                        "\t7. Exit\n"
+                    "------------------------------------------------------\n";
+
+
+void choice_maker(int);  
+
+
 
 int file_exists(const char *file_path) {
     struct stat buffer;
@@ -31,6 +50,35 @@ void get_file_path(char *file_path){
     }
 }
 
+int receiveChoice() {
+    char* buffer = malloc(5*sizeof(int));
+    int len;
+    printf("Receiving chose...\n");
+    len = recv(sockfd_global, buffer, 5, 0);
+    buffer[len] = '\0';
+    printf("Choice received: %s\n", buffer);
+    return atoi(buffer);
+}
+
+void sendText(char* buffer) {
+    send(sockfd_global, buffer, strlen(buffer), 0);
+    printf("Message sent to client.\n");
+}
+
+
+void* newfunc(void* conn)
+{
+    sockfd_global = *(int*)conn; //separete globals for each thread
+
+
+    sendText(choiceText);
+    int choice = receiveChoice();
+    choice_maker(choice);
+    // printf("readinf type of operation ");
+    // int type;
+    // recv(connfd, &type, sizeof(int), 0);
+
+}
 void* func(void* conn)
 {
     int connfd = *(int*)conn;
@@ -139,7 +187,7 @@ void *inetClient()
         pthread_t t;
         // int *pconfd = malloc(sizeof(int));
         // *pconfd = connected_sock;
-        pthread_create(&t, NULL, func, (void *)&connected_sock);
+        pthread_create(&t, NULL, newfunc, (void *)&connected_sock);
     }
     // After chatting close the socket
     close(socket_desc);
@@ -147,43 +195,29 @@ void *inetClient()
 
 
 
-void choise_maker(char *file_path)  
+void choice_maker(int choice)  
 {
-    int choice;
-    VipsImage *image = NULL;
-    do
-    {
-        printf("------------------------------------------------------\n");
-        printf("Please choose an option from the list below:\n");
-        printf("1. Edit a new image\n");
-        printf("2. Save the edited image\n");
-        printf("3. Apply gray scale to the image\n");
-        printf("4. Resize the image\n");
-        printf("5. Rotate the image\n");
-        printf("6. Apply sobel to the image\n");
-        printf("7. Exit\n");
-        printf("------------------------------------------------------\n");
 
-        printf("\nEnter your choice (1-7): ");
-        scanf("%d", &choice);
-        // Remove newline character from the input string
 
-        if (choice == 1)
+
+    if (choice == 1)
         {
             if (image != NULL)
-                printf("\nOverwrite the image");
-            get_file_path(file_path);
+                sendText("\nOverwrite the image");
+            sendText("\nGive me you image\n");
+            // get_file_path(file_path);
             
-            image = vips_image_new_from_file(file_path, NULL);
-            if (!image)
-            {
-                vips_error_exit("Failed to read image");
-            }
-            printf("\n The image was readed.\n\n ");
+            // image = vips_image_new_from_file(file_path, NULL);
+            // if (!image)
+            // {
+            //     sendText("ERROR: fail rad")
+            //     vips_error_exit("Failed to read image");
+            // }
+            // printf("\n The image was readed.\n\n ");
         }
         else if (choice == 7)
         {
-            printf("Closing program...\n");
+            sendText("Closing program...\n");
         }
         else
         {
@@ -230,7 +264,6 @@ void choise_maker(char *file_path)
                 }
             }
         }
-    } while (choice != 7);
 }
 
 
