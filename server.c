@@ -12,10 +12,10 @@
 #include <pthread.h>
 #include "myImageProcessing.h"
 #define SA struct sockaddr
-int path_size = 512;
-int PORT = 5005;
-int sockfd_global;
-VipsImage *image = NULL;
+#define path_size 512
+#define PORT 5005
+_Thread_local int sockfd_global;
+_Thread_local VipsImage *image_global = NULL;
 
 
 char *choiceText = "------------------------------------------------------\n"
@@ -49,6 +49,32 @@ void get_file_path(char *file_path){
         printf("File found at %s\n",file_path);
     }
 }
+char* receiveImage( )
+{
+    FILE *picture;
+    int sizePic;
+    char *image_path = generate_random_image_name('.jpg');  
+
+    picture = fopen(image_path, "wb");
+    if (picture == NULL) {
+        printf("Error opening the image file!\n");
+        exit(1);
+    }
+    recv(sockfd_global, &sizePic, sizeof(sizePic), 0);
+    printf("Received Picture Size: %d\n", sizePic);
+
+    char recv_buffer[1024];
+    int nb;
+    while ((nb = recv(sockfd_global, recv_buffer, sizeof(recv_buffer), 0)) > 0)
+    {
+        fwrite(recv_buffer, 1, nb, picture);
+    }
+
+    fclose(picture);
+
+    return image_path;
+}
+
 
 int receiveChoice() {
     char* buffer = malloc(5*sizeof(int));
@@ -197,23 +223,15 @@ void *inetClient()
 
 void choice_maker(int choice)  
 {
-
-
-
     if (choice == 1)
         {
-            if (image != NULL)
-                sendText("\nOverwrite the image");
-            sendText("\nGive me you image\n");
-            // get_file_path(file_path);
-            
-            // image = vips_image_new_from_file(file_path, NULL);
-            // if (!image)
-            // {
-            //     sendText("ERROR: fail rad")
-            //     vips_error_exit("Failed to read image");
-            // }
-            // printf("\n The image was readed.\n\n ");
+            if (image_global != NULL)
+                sendText("Overwrite the image, Give me you image\n");
+            else
+                sendText("Give me you image \n");
+            char * image_path = receiveImage();
+            image_global = vips_image_new_from_file(image_path,NULL);
+            free(image_global);
         }
         else if (choice == 7)
         {
@@ -221,29 +239,29 @@ void choice_maker(int choice)
         }
         else
         {
-            if (image == NULL)
+            if (image_global == NULL)
             {
-                printf("\n No image was foud load one first !!!\n\n");
+                sendText("\n No image was foudn load one first !!!\n\n");
             }
             else
             {
                 if (choice == 2)
                 {
-                    if (vips_image_write_to_file(image, generate_random_image_name(".jpg"), NULL))
+                    if (vips_image_write_to_file(image_global, generate_random_image_name(".jpg"), NULL))
                         vips_error_exit(NULL);
                     printf("\nImage savedd");
                 }
                 else if (choice == 3)
                 {
-                    image = grayscale(image);
-                    printf("Changes apply\n");
+                    image_global = grayscale(image_global);
+                    sendText("Changes apply\n");
                 }
                 else if (choice == 4)
                 {
                     double resize;
                     printf("\nEnter scale to be resized: ");
                     scanf("%le", &resize);
-                    image = resize_image(image, resize);
+                    image_global = resize_image(image_global, resize);
                     printf("Changes apply\n");
                 }
                 else if (choice == 5)
@@ -251,16 +269,16 @@ void choice_maker(int choice)
                     double angle;
                     printf("\nEnter the angle to rotate: ");
                     scanf("%le", &angle);
-                    image = rotate_image(image, angle);
+                    image_global = rotate_image(image_global, angle);
                 }
                 else if (choice == 6)
                 {
-                    image = apply_sobel(image);
-                    printf("Changes apply\n");
+                    image_global = apply_sobel(image_global);
+                    sendText("Changes apply\n");
                 }
                 else
                 {
-                    printf("Invalid choice. Please choose a number between 1 and 7.\n");
+                    sendText("Invalid choice. Please choose a number between 1 and 7.\n");
                 }
             }
         }
