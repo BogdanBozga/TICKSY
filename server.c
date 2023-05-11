@@ -229,9 +229,9 @@ void choice_maker(int choice)
                 sendText("Overwrite the image, Give me you image\n");
             else
                 sendText("Give me you image \n");
-            char * image_path = receiveImage();
-            image_global = vips_image_new_from_file(image_path,NULL);
-            free(image_global);
+            // char * image_path = receiveImage();
+            // image_global = vips_image_new_from_file(image_path,NULL);
+            // free(image_global);
         }
         else if (choice == 7)
         {
