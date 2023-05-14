@@ -37,29 +37,35 @@ VipsImage* rotate_image(VipsImage* image,double angle) {
 }
 
 char* generate_random_image_name(const char *extension) {
+    printf(" extension %s\n",extension);
     const char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     int alphabet_size = sizeof(alphabet) - 1;
     int random_length = 20;
-
-    char *buffer = NULL;
-    if (buffer != NULL) {
-        free(buffer);
-    }
+    char *buffer=NULL;
+    printf(" new buffer %s\n",buffer);
     buffer = malloc(30*sizeof(char)+1);
-    
+    strcat(buffer, "m");
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
 
     strftime(buffer, 17, "%Y:%m:%d_%H:%M_", t);
     char s = '-';
     buffer[strlen(buffer)] = s;
-
-    srand(time(NULL));
+    time_t t2; 
+    srand((unsigned)time(&t2));
     for (int i = strlen(buffer); i < random_length; ++i) {
-        buffer[i] = alphabet[rand() % alphabet_size];
+        srand(time(NULL));
+        buffer[i] = alphabet[rand()%alphabet_size];
     }
+    // printf("without extension %s\n",buffer);
     strcat(buffer, extension);
-    return buffer;
+    // printf("with extension %s\n",buffer);
+
+
+    char *copy = malloc(30*sizeof(char)+1);
+    strcpy(copy,buffer);
+    free(buffer);
+    return copy;
 }
 
 

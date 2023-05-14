@@ -23,7 +23,7 @@
 
 #define MAXLINE 512
 #define MAX_THREADS 100	
-int PORT = 5005;
+#define PORT 5006
 int sockfd_global;
 
 					
@@ -107,32 +107,45 @@ char* receiveText()
     return buffer;
 }
 
+int my_read_size(int nr1, int *remainSize){
+    if (nr1<*remainSize){
+        *remainSize -= nr1;
+    }else{
+        nr1 = *remainSize;
+        *remainSize = 0;
+    }
+    return nr1;
+
+}
 
 char* receiveImage( )
 {
     FILE *picture;
     int sizePic;
     char *image_name = receiveText();
-    FILE* file = fopen(image_name, "wb");
-    if (file == NULL) {
+    printf("Image name recived is %s\n",image_name);
+    picture = fopen(image_name, "wb");
+    if (picture == NULL) {
         printf("Failed to open the file for writing.\n");
-        return;
+        exit(1);
     }
+
     recv(sockfd_global, &sizePic, sizeof(sizePic), 0);
     printf("Received Picture Size: %d\n", sizePic);
+
 
     char recv_buffer[1024];
     int nb;
     int read_size = my_read_size(MAXLINE, &sizePic);
-    while ((nb = recv(sockfd_global, recv_buffer, read_size, 0)) > 0)
+    // int transationNr = 0;
+    while(read_size > 0)
     {
-        fwrite(recv_buffer, 1, nb, file);
-        printf("Bytes send: %zu\n", read_size);
+        nb = recv(sockfd_global, recv_buffer, read_size, 0);
+        fwrite(recv_buffer, 1, nb, picture);
         read_size = my_read_size(MAXLINE, &sizePic);
     }
 
-    fclose(file);
-
+    fclose(picture);
     return image_name;
 }
 
@@ -171,6 +184,7 @@ void sendImage()
 {
     FILE *picture;
     char image_path[256];
+    memset(image_path, 0, sizeof(image_path));
     printf("Enter a image path: ");
     fgets(image_path, sizeof(image_path), stdin);
     image_path[strcspn(image_path, "\n")] = '\0';
@@ -178,9 +192,15 @@ void sendImage()
     while (file_exists(image_path) == 1){
         chech_directory();
         printf("Wrong path or extension (not .jpg or .png)\nTry again ...\n");
+        memset(image_path, 0, sizeof(image_path));
         fgets(image_path, sizeof(image_path), stdin);
+        image_path[strcspn(image_path, "\n")] = '\0';
     }
     picture = fopen(image_path, "rb");
+    if (picture == NULL) {
+        printf("Error opening file!\n");
+        exit(1);
+    }
 
     int sizePic;
     fseek(picture, 0, SEEK_END);
@@ -190,12 +210,11 @@ void sendImage()
     send(sockfd_global, &sizePic, sizeof(sizePic), 0);
     printf("Sended Picture Size: %d\n", sizePic);
 
-    char send_buffer[MAXLINE];
+    char send_buffer[MAXLINE+1];
     size_t bytesRead;
+    // int transactionNr = 0;
     while ((bytesRead = fread(send_buffer, sizeof(char), MAXLINE, picture)) > 0) {
-
-        printf("Bytes send: %zu\n", bytesRead);
-        bytesRead = fread(send_buffer, 1, sizeof(send_buffer), picture);
+        // printf("Transaction  %d sending %zu,\n",++transactionNr, bytesRead);
         send(sockfd_global, send_buffer, bytesRead, 0);
         // fseek(picture, bytesRead, SEEK_CUR);
     }
@@ -204,7 +223,7 @@ void sendImage()
 
 int main()
 {
-    char buffer[MAXLINE];
+    
 
     struct sockaddr_in servaddr;
 
@@ -229,24 +248,65 @@ int main()
 
     while (1)
     {
-        bzero(buffer, sizeof(buffer));
-        receiveText(); // choice  list
-        fgets(buffer, sizeof(buffer), stdin);
-        sendText(buffer); // send choice
-        char *text = receiveText();
-        if (strstr(text, "Give me you image") != NULL)
-        {
-            printf("Sending image option selected.\n");
-            sendImage();
-        }
-        else if (strstr(text, "Returning image") != NULL)
-        {
-            printf("Reciving image ...\n");
-            receiveImage();
+        char *text = receiveText(); // choice  list
+        if (strstr(text, "Please choose an option") != NULL){
+            char *buffer = malloc(MAXLINE*sizeof(char));
+            int choice;
+            printf("Your choice:");
+            scanf("%d", &choice);
+            printf("Choice selected : %d\n",choice);
+            char str[12];
+            sprintf(str, "%d", choice);
+            sendText(str); // send choice
+            
+            char *text = receiveText();
+            if (strstr(text, "Give me you image") != NULL) //1
+            {
+                printf("Sending image option selected.\n");
+                sendImage();
+            }
+            else if (strstr(text, "Returning image") != NULL) //2
+            {
+                printf("Reciving image ...\n");
+                receiveImage();
 
+            }else if (strstr(text, "Closing program") != NULL) //7
+            {
+                printf("Finishing program ...\n");
+                break;
+
+            }else if (strstr(text, "resize") != NULL) //4
+            {
+                double resize;
+                while (scanf("%lf", &resize) != 1) {
+                    printf("Invalid input. Please enter a number.\n");
+                }
+                char *str = malloc(10 * sizeof(char));
+                
+                sprintf(str, "%lf", resize);
+                sendText(str);
+                free(str); 
+                receiveText();
+            }else if (strstr(text, "rotate") != NULL) //5
+            {
+                double angle;
+                while (scanf("%lf", &angle) != 1) {
+                    printf("Invalid input. Please enter a number.\n");
+                }
+                char *str = malloc(10 * sizeof(char));
+                
+                sprintf(str, "%lf", angle);
+                sendText(str);
+                free(str); 
+                receiveText();
+
+            }else if(strstr(text, "Changes apply") != NULL){
+                printf("good\n");
+            }else{
+                printf("Nothing done.\n");
+            }
         }
     }
-
     // close the socket
     close(sockfd_global);
 }

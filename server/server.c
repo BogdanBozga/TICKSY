@@ -11,12 +11,16 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include "myImageProcessing.h"
+#include <sys/wait.h>
+
 #define SA struct sockaddr
 #define path_size 512
-#define PORT 5005
+#define PORT 5006
+#define MAXLINE 512
+
 _Thread_local int sockfd_global;
 _Thread_local VipsImage *image_global = NULL;
-
+_Thread_local char *image_name_global;
 
 char *choiceText = "------------------------------------------------------\n"
                     "Please choose an option from the list below:\n"
@@ -32,48 +36,71 @@ char *choiceText = "------------------------------------------------------\n"
 
 void choice_maker(int);  
 
+int my_read_size(int nr1, int *remainSize){
+    if (nr1<*remainSize){
+        *remainSize -= nr1;
+    }else{
+        nr1 = *remainSize;
+        *remainSize = 0;
+    }
+    return nr1;
 
+}
 
 int file_exists(const char *file_path) {
     struct stat buffer;
     return (stat(file_path, &buffer) == 0);
 }
 
-void get_file_path(char *file_path){
-    strcpy(file_path,"/home/bogdan-ubuntu-vm/pcd/TICKSY/test.jpg");
-    printf("\n-> %s \n", file_path);
-    if (!file_exists(file_path)) {
-        printf("Error: The file does not exist or there is a problem with permissions.\n");
-        exit(1);
-    }else{
-        printf("File found at %s\n",file_path);
-    }
-}
-char* receiveImage( )
+// void get_file_path(char *file_path){
+//     strcpy(file_path,"/home/bogdan-ubuntu-vm/pcd/TICKSY/test.jpg");
+//     printf("\n-> %s \n", file_path);
+//     if (!file_exists(file_path)) {
+//         printf("Error: The file does not exist or there is a problem with permissions.\n");
+//         exit(1);
+//     }else{
+//         printf("File found at %s\n",file_path);
+//     }
+// }
+
+void receiveImage( )
 {
     FILE *picture;
     int sizePic;
-    char *image_path = generate_random_image_name('.jpg');  
+    char extension[] = ".jpg";
+    char *image_path = generate_random_image_name(extension);  
 
     picture = fopen(image_path, "wb");
     if (picture == NULL) {
         printf("Error opening the image file!\n");
         exit(1);
     }
+
     recv(sockfd_global, &sizePic, sizeof(sizePic), 0);
     printf("Received Picture Size: %d\n", sizePic);
 
     char recv_buffer[1024];
     int nb;
-    while ((nb = recv(sockfd_global, recv_buffer, sizeof(recv_buffer), 0)) > 0)
+    int read_size = my_read_size(MAXLINE, &sizePic);
+    int transationNr = 0;
+    while(read_size > 0)
     {
+        printf("Transaction %d , receiving %u \n",++transationNr,read_size);
+        nb = recv(sockfd_global, recv_buffer, read_size, 0);
         fwrite(recv_buffer, 1, nb, picture);
+        read_size = my_read_size(MAXLINE, &sizePic);
     }
+    printf("Image name file %s\n",image_path);
+    image_global = vips_image_new_from_file(image_path,NULL);
 
+    if (image_global == NULL){
+            vips_error_exit(NULL);
+    }
+    image_name_global = image_path;
     fclose(picture);
-
-    return image_path;
 }
+
+
 
 
 int receiveChoice() {
@@ -85,24 +112,37 @@ int receiveChoice() {
     printf("Choice received: %s\n", buffer);
     return atoi(buffer);
 }
-
-void sendText(char* buffer) {
+void sendTextChild(char* buffer){
     send(sockfd_global, buffer, strlen(buffer), 0);
     printf("Message sent to client.\n");
+}
+
+void sendText(char* buffer) {
+    pid_t pid = fork();  
+    if (pid < 0) {
+        printf("Error: fork failed\n");
+        exit(1);
+    }
+    if (pid == 0) {  
+        // printf("%s with length %ld\n",buffer,strlen(buffer));
+        sendTextChild(buffer);
+        _exit(0);  
+    } else {  
+        wait(NULL);  
+    }
 }
 
 
 void* newfunc(void* conn)
 {
     sockfd_global = *(int*)conn; //separete globals for each thread
-
-
-    sendText(choiceText);
-    int choice = receiveChoice();
-    choice_maker(choice);
-    // printf("readinf type of operation ");
-    // int type;
-    // recv(connfd, &type, sizeof(int), 0);
+    int choice = 7;
+    do{
+        sendText(choiceText);
+        choice = receiveChoice();
+        choice_maker(choice);
+    }while(choice != 7);
+    return NULL;
 
 }
 void* func(void* conn)
@@ -121,54 +161,7 @@ void* func(void* conn)
     recv(connfd, &size, sizeof(int), 0);
     printf("Received Picture Size: %d\n", size);
 
-    // Read Picture Byte Array
     printf("Reading Picture Byte Array\n");
-    // char p_array[1024];
-    // char *filename;
-    // filename = generate_random_image_name("png");
-
-    // char folder[255] = "serverIn/";
-    // strcat(folder, filename);
-
-    // FILE *image = fopen(folder, "wb");
-    // int nb;
-    // while (size > 0)
-    // {
-
-    //     nb = recv(connfd, p_array, 1024, 0);
-    //     if (nb < 0)
-    //         continue;
-    //     size = size - nb;
-
-    //     fwrite(p_array, 1, nb, image);
-    // }
-
-    // fclose(image);
-
-    // VipsImage *in;
-
-    // printf("Image proccesing started\n");
-    // if (!(in = vips_image_new_from_file(folder, NULL)))
-    //     vips_error_exit(NULL);
-
-    // printf("image loaded\n");
-
-    // printf("image processed\n");
-
-    // char folder1[255] = "serverOut/";
-    // strcat(folder1, filename);
-
-    // if (vips_image_write_to_file(out, folder1, NULL))
-    //     vips_error_exit(NULL);
-
-    // printf("Image proccesing ended\n");
-
-    // g_object_unref(in);
-    // g_object_unref(out);
-
-    // sendImg(connfd, filename);
-
-    // return 0;
     return NULL;
 }
 
@@ -220,36 +213,76 @@ void *inetClient()
 }
 
 
+void sendImage()
+{
+    FILE *picture;
+
+
+
+// Don't fo
+    char *image_path_modf = calloc(32,sizeof(char));
+    strncat(image_path_modf, "m", 30);
+    strncat(image_path_modf, image_name_global, 30 - strlen(image_path_modf));
+
+    // strcat(image_path_modf,"m");
+    // strcat(image_path_modf,image_name_global);
+
+
+    printf("Image name before send (%s)...\n",image_path_modf);
+    if (vips_image_write_to_file(image_global, image_path_modf, NULL))
+            vips_error_exit(NULL);
+    picture = fopen(image_path_modf, "rb");
+    if (picture == NULL) {
+        printf("Error opening file!\n");
+        exit(1);
+    }
+    int sizePic;
+    fseek(picture, 0, SEEK_END);
+    sizePic = ftell(picture);
+    fseek(picture, 0, SEEK_SET);
+
+    printf("Sending image name (%s)...\n",image_path_modf);
+    sendText(image_path_modf);
+
+    send(sockfd_global, &sizePic, sizeof(sizePic), 0);
+    printf("Sended Picture Size: %d\n", sizePic);
+
+    char send_buffer[MAXLINE+1];
+    size_t bytesRead;
+    // int transactionNr = 0;
+    while ((bytesRead = fread(send_buffer, sizeof(char), MAXLINE, picture)) > 0) {
+        // printf("Transaction  %d sending %zu,\n",++transactionNr, bytesRead);
+        send(sockfd_global, send_buffer, bytesRead, 0);
+    }
+
+    fclose(picture);
+}
+
 
 void choice_maker(int choice)  
 {
     if (choice == 1)
         {
             if (image_global != NULL)
-                sendText("Overwrite the image, Give me you image\n");
+                sendText("Overwrite the image, Give me you image.\0");
             else
                 sendText("Give me you image \n");
-            // char * image_path = receiveImage();
-            // image_global = vips_image_new_from_file(image_path,NULL);
-            // free(image_global);
-        }
-        else if (choice == 7)
-        {
+            receiveImage();
+        }else if (choice == 7){
             sendText("Closing program...\n");
-        }
-        else
-        {
+        }else{
             if (image_global == NULL)
             {
-                sendText("\n No image was foudn load one first !!!\n\n");
+                sendText("No image was found load one first!\n\0");
             }
             else
             {
                 if (choice == 2)
                 {
-                    if (vips_image_write_to_file(image_global, generate_random_image_name(".jpg"), NULL))
-                        vips_error_exit(NULL);
-                    printf("\nImage savedd");
+                    sendText("Returning image ...\n");
+                    printf("Sending image...\n");
+                    sendImage();
+                    printf("Image sended.\n");
                 }
                 else if (choice == 3)
                 {
@@ -258,18 +291,30 @@ void choice_maker(int choice)
                 }
                 else if (choice == 4)
                 {
-                    double resize;
-                    printf("\nEnter scale to be resized: ");
-                    scanf("%le", &resize);
+                    char* buffer_size = malloc(5*sizeof(int));
+                    int len;
+                    printf("Receiving scale to be resized:...\n");
+                    sendText("Please enter a double for resize scale :");
+                    len = recv(sockfd_global, buffer_size, 10, 0);
+                    buffer_size[len] = '\0';
+                    double resize= atof(buffer_size);
+                    printf("resize get %f\n",resize);
                     image_global = resize_image(image_global, resize);
-                    printf("Changes apply\n");
+                    sendText("Changes apply\n");
+                    free(buffer_size);
                 }
                 else if (choice == 5)
                 {
-                    double angle;
-                    printf("\nEnter the angle to rotate: ");
-                    scanf("%le", &angle);
+                    char* buffer_angle = malloc(5*sizeof(int));
+                    int len;
+                    printf("Receiving the angle to rotate:...\n");
+                    sendText("Enter the angle to rotate: ");
+                    len = recv(sockfd_global, buffer_angle, 10, 0);
+                    buffer_angle[len] = '\0';
+                    double angle= atoi(buffer_angle);
                     image_global = rotate_image(image_global, angle);
+                    sendText("Changes apply\n");
+                    free(buffer_angle);
                 }
                 else if (choice == 6)
                 {
