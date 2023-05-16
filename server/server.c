@@ -12,7 +12,10 @@
 #include <pthread.h>
 #include "myImageProcessing.h"
 #include <sys/wait.h>
+#include <dirent.h>
 
+#define SOCK_PATH "/tmp/my_socket.sock"
+#define UNIX_PATH_MAX 108
 #define SA struct sockaddr
 #define path_size 512
 #define PORT 5006
@@ -52,25 +55,19 @@ int file_exists(const char *file_path) {
     return (stat(file_path, &buffer) == 0);
 }
 
-// void get_file_path(char *file_path){
-//     strcpy(file_path,"/home/bogdan-ubuntu-vm/pcd/TICKSY/test.jpg");
-//     printf("\n-> %s \n", file_path);
-//     if (!file_exists(file_path)) {
-//         printf("Error: The file does not exist or there is a problem with permissions.\n");
-//         exit(1);
-//     }else{
-//         printf("File found at %s\n",file_path);
-//     }
-// }
-
 void receiveImage( )
 {
     FILE *picture;
     int sizePic;
     char extension[] = ".jpg";
-    char *image_path = generate_random_image_name(extension);  
+    char *image_name= generate_random_image_name(extension);  
 
-    picture = fopen(image_path, "wb");
+    char *image_path_in = calloc(50,sizeof(char));
+    strncat(image_path_in, "in/", 49);
+
+    strncat(image_path_in, image_name, 49 - strlen(image_name));
+    
+    picture = fopen(image_path_in, "wb");
     if (picture == NULL) {
         printf("Error opening the image file!\n");
         exit(1);
@@ -90,14 +87,15 @@ void receiveImage( )
         fwrite(recv_buffer, 1, nb, picture);
         read_size = my_read_size(MAXLINE, &sizePic);
     }
-    printf("Image name file %s\n",image_path);
-    image_global = vips_image_new_from_file(image_path,NULL);
-
+    printf("Image name file %s\n",image_name);
+    image_global = vips_image_new_from_file(image_path_in,NULL);
     if (image_global == NULL){
             vips_error_exit(NULL);
     }
-    image_name_global = image_path;
+    image_name_global = calloc(50,sizeof(char));
+    strcpy(image_name_global, image_name);
     fclose(picture);
+    free(image_name);
 }
 
 
@@ -124,7 +122,6 @@ void sendText(char* buffer) {
         exit(1);
     }
     if (pid == 0) {  
-        // printf("%s with length %ld\n",buffer,strlen(buffer));
         sendTextChild(buffer);
         _exit(0);  
     } else {  
@@ -135,7 +132,7 @@ void sendText(char* buffer) {
 
 void* newfunc(void* conn)
 {
-    sockfd_global = *(int*)conn; //separete globals for each thread
+    sockfd_global = *(int*)conn; 
     int choice = 7;
     do{
         sendText(choiceText);
@@ -163,6 +160,158 @@ void* func(void* conn)
 
     printf("Reading Picture Byte Array\n");
     return NULL;
+}
+
+
+long getNumber(int nrFiles, int inFiles){
+    long total_bytes = 0;
+    long file_count = 0;
+    struct dirent *dir_entry;
+    struct stat file_stats;
+    DIR *dir;
+    char inFilePath[] = "in/";
+    char outFilePath[] = "out/";
+
+    char *dir_path;
+    if(inFiles == 1){
+        dir_path = inFilePath;
+    }else{
+        dir_path = outFilePath;
+        
+    }
+    dir = opendir(dir_path);
+    if(dir == NULL) {
+        perror("Unable to read directory");
+        return 1;
+    }
+
+    while((dir_entry = readdir(dir)) != NULL) {
+        char file_path[512];
+        snprintf(file_path, sizeof(file_path), "%s/%s", dir_path, dir_entry->d_name);
+        if(stat(file_path, &file_stats) == 0) {
+            if(S_ISREG(file_stats.st_mode)) {  // Check if it is a regular file
+                total_bytes += file_stats.st_size;
+                file_count++;
+            }
+        }
+        else {
+            perror("Cannot retrieve file stats");
+            return 1;
+        }
+    }
+
+    closedir(dir);
+
+    // printf("Total files: %d\n", file_count);
+    // printf("Total bytes: %ld\n", total_bytes);
+    if(nrFiles ==1){
+        return file_count;
+    }else{
+        return total_bytes;
+    }
+
+}
+
+
+
+void adminHandler(int connfd)
+{
+    while (TRUE)
+    {
+        int option;
+        recv(connfd, &option, sizeof(int), 0);
+        long choice =0;
+
+        if (option == 0)
+        {
+            // getNumber(int nrFiles, int inFiles)
+            choice = getNumber(1, 0);
+
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else if (option == 1)
+        {
+            choice = getNumber(1, 1);
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else if (option == 2)
+        {
+            choice = getNumber(1, 0);
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else if (option == 3)
+        {
+            
+            // long nrF =  getNumber(1, 1);
+            long nrB =  getNumber(0, 1);
+            choice = nrB/MAXLINE;
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else if (option == 4)
+        {
+            long nrB =  getNumber(0, 0);
+            choice = nrB/MAXLINE;
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else if (option == 5)
+        {
+            choice = getNumber(0, 1);
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else if (option == 6)
+        {
+            choice =  getNumber(0, 0);
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+
+
+void *adminClient()
+{
+    int sock1, sock2;
+    struct sockaddr_un admin, remote;
+
+    if ((sock1 = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
+    {
+        perror("socket admin");
+        exit(1);
+    }
+    printf("Socket create for admin\n");
+    memset(&admin, 0, sizeof(struct sockaddr_un));
+    admin.sun_family = AF_UNIX;
+
+    strncpy(admin.sun_path, SOCK_PATH, UNIX_PATH_MAX - 1);
+    unlink(SOCK_PATH);
+    if (bind(sock1, (struct sockaddr *)&admin, sizeof(admin)) == -1)
+    {
+        perror("bind admin");
+        exit(1);
+    }
+    printf("Bind realizat for admin\n");
+    if (listen(sock1, 1) == -1)
+    {
+        perror("listen admin");
+        exit(1);
+    }
+    printf("Server listening for admin..\n");
+    while (TRUE)
+    {
+        printf("Waiting for admin client...\n");
+        socklen_t size = sizeof(remote);
+        if ((sock2 = accept(sock1, (struct sockaddr *)&remote, &size)) == -1)
+        {
+            perror("accept");
+            exit(1);
+        }
+        printf("Admin client connected\n");
+        adminHandler(sock2);
+        close(sock2);
+    }
 }
 
 void *inetClient()
@@ -204,8 +353,6 @@ void *inetClient()
         }
         printf("server accept the client...\n");
         pthread_t t;
-        // int *pconfd = malloc(sizeof(int));
-        // *pconfd = connected_sock;
         pthread_create(&t, NULL, newfunc, (void *)&connected_sock);
     }
     // After chatting close the socket
@@ -216,19 +363,21 @@ void *inetClient()
 void sendImage()
 {
     FILE *picture;
+    char *image_path_modf = calloc(50,sizeof(char));
+    char *image_name_modf = calloc(50,sizeof(char));
+    strncat(image_name_modf, "m", 49);
 
 
 
-// Don't fo
-    char *image_path_modf = calloc(32,sizeof(char));
-    strncat(image_path_modf, "m", 30);
-    strncat(image_path_modf, image_name_global, 30 - strlen(image_path_modf));
+    strncat(image_name_modf, image_name_global, 40 - strlen(image_name_modf)
+    
+    );
+    printf("Image name before send (%s)...\n",image_name_modf);
 
-    // strcat(image_path_modf,"m");
-    // strcat(image_path_modf,image_name_global);
+    strncat(image_path_modf, "out/", 49);
+    strncat(image_path_modf, image_name_modf, 49 - strlen(image_path_modf));
 
-
-    printf("Image name before send (%s)...\n",image_path_modf);
+    printf("hmmm %s\n",image_path_modf);
     if (vips_image_write_to_file(image_global, image_path_modf, NULL))
             vips_error_exit(NULL);
     picture = fopen(image_path_modf, "rb");
@@ -241,8 +390,8 @@ void sendImage()
     sizePic = ftell(picture);
     fseek(picture, 0, SEEK_SET);
 
-    printf("Sending image name (%s)...\n",image_path_modf);
-    sendText(image_path_modf);
+    printf("Sending image name (%s)...\n",image_name_modf);
+    sendText(image_name_modf);
 
     send(sockfd_global, &sizePic, sizeof(sizePic), 0);
     printf("Sended Picture Size: %d\n", sizePic);
@@ -336,11 +485,11 @@ int main(int argc, char **argv)
         vips_error_exit( NULL );
     pthread_t thread_id[2];
 
-    // pthread_create(&thread_id[0], NULL, adminClient, NULL);
+    pthread_create(&thread_id[1], NULL, adminClient, NULL);
     pthread_create(&thread_id[0], NULL, inetClient, NULL);
-    pthread_join(thread_id[0], NULL);
-    // for (int i = 0; i < 1; i++)
-    //     pthread_join(thread_id[i], NULL);
+    // pthread_join(thread_id[0], NULL);
+    for (int i = 0; i < 2; i++)
+        pthread_join(thread_id[i], NULL);
     
     printf("Byyy\n");
     return (0);

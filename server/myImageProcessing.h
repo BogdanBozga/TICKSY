@@ -42,7 +42,6 @@ char* generate_random_image_name(const char *extension) {
     int alphabet_size = sizeof(alphabet) - 1;
     int random_length = 20;
     char *buffer=NULL;
-    printf(" new buffer %s\n",buffer);
     buffer = malloc(30*sizeof(char)+1);
     strcat(buffer, "m");
     time_t now = time(NULL);
