@@ -110,10 +110,6 @@ int receiveChoice() {
     printf("Choice received: %s\n", buffer);
     return atoi(buffer);
 }
-void sendTextChild(char* buffer){
-    send(sockfd_global, buffer, strlen(buffer), 0);
-    printf("Message sent to client.\n");
-}
 
 void sendText(char* buffer) {
     pid_t pid = fork();  
@@ -122,7 +118,8 @@ void sendText(char* buffer) {
         exit(1);
     }
     if (pid == 0) {  
-        sendTextChild(buffer);
+        send(sockfd_global, buffer, strlen(buffer), 0);
+        printf("Message sent to client.\n");
         _exit(0);  
     } else {  
         wait(NULL);  
@@ -140,27 +137,27 @@ void* newfunc(void* conn)
         choice_maker(choice);
     }while(choice != 7);
     return NULL;
-
 }
-void* func(void* conn)
-{
-    int connfd = *(int*)conn;
-    printf("readinf type of operation ");
-    int type;
-    recv(connfd, &type, sizeof(int), 0);
-    printf("%d \n", type);
-    if (type < 1 || type > 5)
-    {
-        // return 1;
-    }
-    printf("Reading Picture Size\n");
-    int size;
-    recv(connfd, &size, sizeof(int), 0);
-    printf("Received Picture Size: %d\n", size);
 
-    printf("Reading Picture Byte Array\n");
-    return NULL;
-}
+// void* func(void* conn)
+// {
+//     int connfd = *(int*)conn;
+//     printf("readinf type of operation ");
+//     int type;
+//     recv(connfd, &type, sizeof(int), 0);
+//     printf("%d \n", type);
+//     if (type < 1 || type > 5)
+//     {
+//         // return 1;
+//     }
+//     printf("Reading Picture Size\n");
+//     int size;
+//     recv(connfd, &size, sizeof(int), 0);
+//     printf("Received Picture Size: %d\n", size);
+
+//     printf("Reading Picture Byte Array\n");
+//     return NULL;
+// }
 
 
 long getNumber(int nrFiles, int inFiles){
@@ -225,7 +222,7 @@ void adminHandler(int connfd)
         if (option == 0)
         {
             // getNumber(int nrFiles, int inFiles)
-            choice = getNumber(1, 0);
+            choice = getNumber(1, 0); // 1 - images, 0 - pachages /// 0 -  returned /// 1 - only recived
 
             send(connfd, &choice, sizeof(int), 0);
         }
@@ -236,20 +233,20 @@ void adminHandler(int connfd)
         }
         else if (option == 2)
         {
-            choice = getNumber(1, 0);
+            choice = getNumber(1, 0);// nr images returned  
             send(connfd, &choice, sizeof(int), 0);
         }
         else if (option == 3)
         {
             
             // long nrF =  getNumber(1, 1);
-            long nrB =  getNumber(0, 1);
+            long nrB =  getNumber(0, 1); // nr pachage received 
             choice = nrB/MAXLINE;
             send(connfd, &choice, sizeof(int), 0);
         }
         else if (option == 4)
         {
-            long nrB =  getNumber(0, 0);
+            long nrB =  getNumber(0, 0); // nr pachage returned 
             choice = nrB/MAXLINE;
             send(connfd, &choice, sizeof(int), 0);
         }
@@ -352,6 +349,7 @@ void *inetClient()
             exit(0);
         }
         printf("server accept the client...\n");
+        printf("Client connected on port %d\n",ntohs(client_addr.sin_port));
         pthread_t t;
         pthread_create(&t, NULL, newfunc, (void *)&connected_sock);
     }

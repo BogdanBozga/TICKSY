@@ -40,11 +40,11 @@ int main(){
         printf("Choose operation typing the number:\n");
         printf("0 - Total number of images processed;\n");
         printf("1 - Total number of images received;\n");
-        printf("2 - Total number of images sended;\n");
+        printf("2 - Total number of images sent;\n");
         printf("3 - Total number of pachets received\n");
-        printf("4 - Total number of pachets sended\n");
+        printf("4 - Total number of pachets sent\n");
         printf("5 - Total number of bytes received\n");
-        printf("6 - Total number of bytes sended\n");
+        printf("6 - Total number of bytes sent\n");
         printf("Any key - to exit.\n");
         printf("Choice: ");
 		scanf("%d", &choice);
