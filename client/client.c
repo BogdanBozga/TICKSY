@@ -20,7 +20,7 @@
 #include <limits.h>	
 
 
-
+//so_reuse_ADDR
 #define MAXLINE 512
 #define MAX_THREADS 100	
 #define PORT 5006
@@ -115,7 +115,6 @@ int my_read_size(int nr1, int *remainSize){
         *remainSize = 0;
     }
     return nr1;
-
 }
 
 char* receiveImage( )

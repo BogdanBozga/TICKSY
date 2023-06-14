@@ -13,7 +13,7 @@ sockfd_global = None
 
 def get_current_dir():
     global directoryPath
-    directoryPath = 'client/'+os.getcwd() 
+    directoryPath = os.getcwd() 
     print(f"Current working directory: {directoryPath}")
 
 def file_thread(entry):
@@ -25,16 +25,10 @@ def file_thread(entry):
     print(f"\tFile: {entry}, Size: {fileStat.st_size}  bytes, Permissions: {perms}")
 
 def check_directory():
-    get_current_dir()
+    directoryPath = os.getcwd()
     print(f"\nReading from: {directoryPath}")
-    threadfiles = []
-    for dirEntry in os.listdir(directoryPath):
-        if os.path.isfile(os.path.join(directoryPath, dirEntry)):
-            thread = threading.Thread(target=file_thread, args=(dirEntry,))
-            threadfiles.append(thread)
-            thread.start()
-    for thread in threadfiles:
-        thread.join()
+    for item in os.listdir(directoryPath):
+        print(item)
 
 def receive_text():
     buffer = sockfd_global.recv(MAXLINE).decode()
