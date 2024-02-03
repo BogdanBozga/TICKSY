@@ -139,25 +139,6 @@ void* newfunc(void* conn)
     return NULL;
 }
 
-// void* func(void* conn)
-// {
-//     int connfd = *(int*)conn;
-//     printf("readinf type of operation ");
-//     int type;
-//     recv(connfd, &type, sizeof(int), 0);
-//     printf("%d \n", type);
-//     if (type < 1 || type > 5)
-//     {
-//         // return 1;
-//     }
-//     printf("Reading Picture Size\n");
-//     int size;
-//     recv(connfd, &size, sizeof(int), 0);
-//     printf("Received Picture Size: %d\n", size);
-
-//     printf("Reading Picture Byte Array\n");
-//     return NULL;
-// }
 
 
 long getNumber(int nrFiles, int inFiles){
